@@ -17,7 +17,7 @@ const navigation = [
 
 type FplData = {
   updatedAt: string;
-  gameweek: { id: number; name: string; deadline_time: string } | null;
+  gameweek: { id: number; name: string; deadline_time: string } | null;\n  picksEvent: { id: number; name: string } | null;
   totals: { players: number; teams: number };
   players: Array<{ id: number; name: string; team: number; position: number; price: number; points: number; form: string; status: string; selectedBy: string }>;
   clubs: Array<{ id: number; name: string; short_name: string }>;
@@ -99,18 +99,70 @@ export default function Home() {
 
         <section className="metric-grid">{metrics.map((metric) => { const Icon = metric.icon; return <div className="card" key={metric.label}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}><span className="metric-label">{metric.label}</span><Icon size={16} color="#98a3b2" /></div><div className="metric-value">{metric.value}</div><div className="metric-note">{metric.note}</div></div>; })}</section>
 
-        <div className="section-heading"><div><h2>Team overview</h2><p>Your FPL squad and current performance</p></div></div>
+        <div className="section-heading"><div><h2>My Team</h2><p>Full squad overview · starting XI and substitutes</p></div></div>
+        <section className="card" style={{marginBottom:14}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap",marginBottom:18}}>
+            <div><h2 style={{fontSize:14,margin:0}}>{manager?.name ?? "Your FPL squad"}</h2><p className="metric-note">{manager ? `Team ID ${teamId}` : "Connect your FPL Team ID to load all 15 players"}</p></div>
+            <div className="status-pill">{data?.picksEvent ? `Squad · ${data.picksEvent.name}` : "Squad not loaded"}</div>
+          </div>
+          {data?.picks?.picks?.length ? <>
+            {(["Goalkeeper","Defenders","Midfielders","Forwards"] as const).map((group, groupIndex) => {
+              const positions = [1,2,3,4];
+              const players = data.picks!.picks!.filter((pick) => playerById.get(pick.element)?.position === positions[groupIndex] && pick.position <= 11);
+              if (!players.length) return null;
+              return <div key={group} style={{marginBottom:18}}>
+                <div className="nav-label" style={{padding:0,marginBottom:8}}>{group}</div>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(125px,1fr))",gap:9}}>
+                  {players.map((pick) => {
+                    const player = playerById.get(pick.element);
+                    if (!player) return null;
+                    return <div key={pick.element} style={{border:"1px solid #e8ebf0",borderRadius:10,padding:11,background:"#fbfcfb",textAlign:"center"}}>
+                      <div style={{fontSize:12,fontWeight:700}}>{player.name}</div>
+                      <div className="metric-note">{clubName(player.team)} · £{(player.price/10).toFixed(1)}m</div>
+                      <div style={{display:"flex",justifyContent:"center",gap:5,flexWrap:"wrap",marginTop:8}}>
+                        <span className="status-pill">{player.points} pts</span>
+                        {pick.is_captain && <span className="status-pill" style={{background:"#eaf5ef",color:"#167a55"}}>C</span>}
+                        {pick.is_vice_captain && <span className="status-pill">VC</span>}
+                      </div>
+                    </div>;
+                  })}
+                </div>
+              </div>;
+            })}
+            <div style={{borderTop:"1px solid #e8ebf0",paddingTop:14}}>
+              <div className="nav-label" style={{padding:0,marginBottom:8}}>Substitutes</div>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(125px,1fr))",gap:9}}>
+                {data.picks.picks.filter((pick) => pick.position > 11).sort((a,b)=>a.position-b.position).map((pick) => {
+                  const player = playerById.get(pick.element);
+                  if (!player) return null;
+                  return <div key={pick.element} style={{border:"1px solid #e8ebf0",borderRadius:10,padding:11,background:"#f7f8fa",textAlign:"center"}}>
+                    <div className="metric-note">Bench {pick.position - 11}</div>
+                    <div style={{fontSize:12,fontWeight:700}}>{player.name}</div>
+                    <div className="metric-note">{clubName(player.team)} · £{(player.price/10).toFixed(1)}m · {player.points} pts</div>
+                  </div>;
+                })}
+              </div>
+            </div>
+          </> : <div className="empty-state"><strong>{manager ? "Your full squad is not published yet" : "No team connected yet"}</strong>Enter your Team ID below. FPL makes the complete 15-player squad available through a Gameweek team-picks endpoint once picks are published. We also try the latest completed Gameweek.</div>}
+          <form className="team-form" onSubmit={(event) => { event.preventDefault(); void connectTeam(); }}><input className="team-input" value={teamId} onChange={(event)=>setTeamId(event.target.value)} placeholder="Enter your FPL Team ID" inputMode="numeric" aria-label="FPL Team ID" /><button className="primary-button" type="submit" disabled={loading}>{loading ? "Connecting..." : "Load my team"}</button></form>
+          {notice && <p className="metric-note" role="status">{notice}</p>}
+        </section>
         <section className="content-grid">
           <div className="card">
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18}}><div><h2 style={{fontSize:14,margin:0}}>My squad</h2><p className="metric-note">{manager ? `${manager.name ?? "FPL manager"} · Team ID ${teamId}` : "Connect your FPL team"}</p></div><ShieldCheck size={18} color="#98a3b2" /></div>
-            {data?.picks?.picks?.length ? <div style={{display:"grid",gap:8}}>{data.picks.picks.map((pick) => { const player = playerById.get(pick.element); return <div key={pick.element} style={{display:"flex",justifyContent:"space-between",borderBottom:"1px solid #eef0f3",padding:"8px 2px",fontSize:12}}><span>{player?.name ?? `Player ${pick.element}`} {pick.is_captain ? " · C" : ""} {pick.is_vice_captain ? " · VC" : ""}</span><span className="muted">{clubName(player?.team ?? 0)} · {player ? (player.price / 10).toFixed(1) : "—"}m</span></div>; })}</div> : <div className="empty-state"><strong>{manager ? "Your picks are not available yet" : "No team connected yet"}</strong>FPL publishes team picks around the Gameweek deadline. Connect your Team ID to load your manager profile.</div>}
-            <form className="team-form" onSubmit={(event) => { event.preventDefault(); void connectTeam(); }}><input className="team-input" value={teamId} onChange={(event)=>setTeamId(event.target.value)} placeholder="Enter your FPL Team ID" inputMode="numeric" aria-label="FPL Team ID" /><button className="primary-button" type="submit" disabled={loading}>{loading ? "Connecting..." : "Connect team"}</button></form>
-            {notice && <p className="metric-note" role="status">{notice}</p>}
+            <h2 style={{fontSize:14,margin:0}}>Team summary</h2>
+            <p className="metric-note">Your FPL account overview</p>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:12,marginTop:16}}>
+              <div><div className="metric-note">Overall points</div><strong>{manager?.summary_overall_points?.toLocaleString() ?? "—"}</strong></div>
+              <div><div className="metric-note">Overall rank</div><strong>{manager?.summary_overall_rank?.toLocaleString() ?? "—"}</strong></div>
+              <div><div className="metric-note">Team value</div><strong>{manager?.value ? `£${(manager.value/10).toFixed(1)}m` : "—"}</strong></div>
+              <div><div className="metric-note">In the bank</div><strong>{manager?.bank !== undefined ? `£${(manager.bank/10).toFixed(1)}m` : "—"}</strong></div>
+            </div>
           </div>
           <div className="card">
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18}}><div><h2 style={{fontSize:14,margin:0}}>ScoutIQ insights</h2><p className="metric-note">Live data from Fantasy Premier League</p></div><Search size={17} color="#98a3b2" /></div>
-            <div className="empty-state"><strong>{data ? `${data.totals.players} players · ${data.totals.teams} clubs` : "Loading FPL data..."}</strong>{data?.gameweek ? `${data.gameweek.name} · Deadline ${new Date(data.gameweek.deadline_time).toLocaleString()}` : "Player and fixture information will appear when the API responds."}</div>
-            <button className="primary-button" style={{height:36,marginTop:14}} onClick={() => void connectTeam()} disabled={loading}><RefreshCw size={13} style={{verticalAlign:"middle",marginRight:7}} />Refresh FPL data</button>
+            <h2 style={{fontSize:14,margin:0}}>FPL data status</h2>
+            <p className="metric-note">{data ? `${data.totals.players} players · ${data.totals.teams} clubs loaded` : "Waiting for FPL data"}</p>
+            <div className="empty-state" style={{marginTop:14}}><strong>{data?.gameweek?.name ?? "Gameweek information"}</strong>{data?.gameweek ? `Deadline ${new Date(data.gameweek.deadline_time).toLocaleString()}` : "Current and next Gameweek data will appear here."}</div>
+            <button className="primary-button" style={{height:36,marginTop:14}} onClick={() => void connectTeam()} disabled={loading}><RefreshCw size={13} style={{verticalAlign:"middle",marginRight:7}} />Refresh team</button>
           </div>
         </section>
 
