@@ -34,7 +34,7 @@ export default function Home() {
 
   async function connectTeam(id = teamId) {
     const cleanId = id.trim();
-    if (!/^\\d{1,10}$/.test(cleanId)) {
+    if (!/^\d{1,10}$/.test(cleanId)) {
       setNotice("Ange ett giltigt numeriskt FPL Team ID.");
       return;
     }
