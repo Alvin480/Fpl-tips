@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
   try {
     const teamId = request.nextUrl.searchParams.get("teamId")?.trim();
 
-    if (teamId && !/^\\d{1,10}$/.test(teamId)) {
+    if (teamId && !/^\d{1,10}$/.test(teamId)) {
       return NextResponse.json({ error: "Team ID must contain digits only." }, { status: 400 });
     }
 
