@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Activity, ArrowUpRight, BarChart3, CalendarDays, CircleHelp,
-  Crosshair, LayoutDashboard, RefreshCw, Search, Settings2, ShieldCheck,
-  Users, Wallet,
+  Crosshair, LayoutDashboard, RefreshCw, Search, Settings2,
+  ShieldCheck, Users, Wallet,
 } from "lucide-react";
 
 const navigation = [
@@ -15,112 +15,110 @@ const navigation = [
   { label: "Fixtures & Analysis", icon: CalendarDays },
 ];
 
+type FplData = {
+  updatedAt: string;
+  gameweek: { id: number; name: string; deadline_time: string } | null;
+  totals: { players: number; teams: number };
+  players: Array<{ id: number; name: string; team: number; position: number; price: number; points: number; form: string; status: string; selectedBy: string }>;
+  clubs: Array<{ id: number; name: string; short_name: string }>;
+  manager: { name?: string; player_first_name?: string; player_last_name?: string; summary_overall_points?: number; summary_overall_rank?: number; value?: number; bank?: number } | null;
+  picks: { picks?: Array<{ element: number; position: number; multiplier: number; is_captain: boolean; is_vice_captain: boolean }> } | null;
+  teamError: string | null;
+};
+
 export default function Home() {
   const [teamId, setTeamId] = useState("");
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState("");
+  const [data, setData] = useState<FplData | null>(null);
 
-  async function connectTeam(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!/^\d{1,10}$/.test(teamId.trim())) {
+  async function connectTeam(id = teamId) {
+    const cleanId = id.trim();
+    if (!/^\\d{1,10}$/.test(cleanId)) {
       setNotice("Ange ett giltigt numeriskt FPL Team ID.");
       return;
     }
     setLoading(true);
-    setNotice("Team ID sparat lokalt. Nästa steg är att ansluta FPL-data.");
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem("scoutiq-team-id", teamId.trim());
+    setNotice("");
+    try {
+      const response = await fetch(`/api/fpl?teamId=${encodeURIComponent(cleanId)}`);
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Kunde inte hämta FPL-data.");
+      setData(result);
+      if (result.teamError) setNotice(result.teamError);
+      else if (result.manager) setNotice("Ditt FPL-lag är anslutet. Data hämtades från FPL.");
+      else setNotice("FPL-data hämtad, men managerprofilen kunde inte hittas.");
+      window.localStorage.setItem("scoutiq-team-id", cleanId);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Något gick fel vid anslutningen.");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }
+
+  useEffect(() => {
+    const saved = window.localStorage.getItem("scoutiq-team-id");
+    if (saved) {
+      setTeamId(saved);
+      void connectTeam(saved);
+    } else {
+      fetch("/api/fpl")
+        .then(async (response) => {
+          if (!response.ok) throw new Error("FPL data unavailable");
+          setData(await response.json());
+        })
+        .catch(() => setNotice("Kunde inte nå FPL just nu. Försök igen senare."));
+    }
+  }, []);
+
+  const manager = data?.manager;
+  const metrics = [
+    { label: "Overall points", value: manager?.summary_overall_points?.toLocaleString() ?? "—", note: manager ? "FPL manager points" : "Connect your FPL team", icon: Activity },
+    { label: "Overall rank", value: manager?.summary_overall_rank?.toLocaleString() ?? "—", note: "Your global position", icon: Crosshair },
+    { label: "Team value", value: manager?.value ? `£${(manager.value / 10).toFixed(1)}m` : "—", note: manager ? "Current squad value" : "Squad market value", icon: Wallet },
+    { label: "Gameweek", value: data?.gameweek?.id ? `GW ${data.gameweek.id}` : "—", note: data?.gameweek?.name ?? "Upcoming deadline", icon: CalendarDays },
+  ];
+
+  const clubName = (id: number) => data?.clubs.find((club) => club.id === id)?.short_name ?? "—";
+  const playerById = new Map((data?.players ?? []).map((player) => [player.id, player]));
 
   return (
     <div className="dashboard-shell">
       <aside className="sidebar">
-        <div className="brand">
-          <div className="brand-mark">S</div>
-          <div><div className="brand-name">ScoutIQ</div><div className="brand-sub">FPL Intelligence</div></div>
-        </div>
-        <div>
-          <div className="nav-label">WORKSPACE</div>
-          <nav className="nav-list">
-            {navigation.map((item, index) => {
-              const Icon = item.icon;
-              return <button className={`nav-item ${index === 0 ? "active" : ""}`} key={item.label}>
-                <Icon size={16} strokeWidth={1.8} /> {item.label}
-              </button>;
-            })}
-          </nav>
-        </div>
-        <div>
-          <div className="nav-label">PREFERENCES</div>
-          <nav className="nav-list">
-            <button className="nav-item"><Settings2 size={16} /> Settings</button>
-            <button className="nav-item"><CircleHelp size={16} /> Help & feedback</button>
-          </nav>
-        </div>
+        <div className="brand"><div className="brand-mark">S</div><div><div className="brand-name">ScoutIQ</div><div className="brand-sub">FPL Intelligence</div></div></div>
+        <div><div className="nav-label">WORKSPACE</div><nav className="nav-list">{navigation.map((item, index) => { const Icon = item.icon; return <button className={`nav-item ${index === 0 ? "active" : ""}`} key={item.label}><Icon size={16} strokeWidth={1.8} /> {item.label}</button>; })}</nav></div>
+        <div><div className="nav-label">PREFERENCES</div><nav className="nav-list"><button className="nav-item"><Settings2 size={16} /> Settings</button><button className="nav-item"><CircleHelp size={16} /> Help & feedback</button></nav></div>
         <div className="sidebar-bottom">Personal FPL workspace<br />Built for better decisions.</div>
       </aside>
 
       <main className="main-area">
         <header className="topbar">
-          <div><div className="eyebrow">Overview / Gameweek</div><h1 className="page-title">Good to have you back.</h1></div>
-          <div className="status-pill"><span className="status-dot" /> Waiting for FPL connection</div>
+          <div><div className="eyebrow">Overview / Gameweek</div><h1 className="page-title">Good to have you back{manager?.player_first_name ? `, ${manager.player_first_name}` : ""}.</h1></div>
+          <div className="status-pill"><span className="status-dot" style={{ background: data ? "#16845a" : "#d59a36" }} /> {data ? "FPL data connected" : "Connecting to FPL"}</div>
         </header>
 
-        <section className="metric-grid">
-          {[
-            { label: "Overall points", value: "—", note: "Connect your FPL team", icon: Activity },
-            { label: "Overall rank", value: "—", note: "Your global position", icon: Crosshair },
-            { label: "Team value", value: "—", note: "Squad market value", icon: Wallet },
-            { label: "Next Gameweek", value: "—", note: "Deadline and fixtures", icon: CalendarDays },
-          ].map((metric) => {
-            const Icon = metric.icon;
-            return <div className="card" key={metric.label}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                <span className="metric-label">{metric.label}</span><Icon size={16} color="#98a3b2" />
-              </div>
-              <div className="metric-value">{metric.value}</div>
-              <div className="metric-note">{metric.note}</div>
-            </div>;
-          })}
-        </section>
+        <section className="metric-grid">{metrics.map((metric) => { const Icon = metric.icon; return <div className="card" key={metric.label}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}><span className="metric-label">{metric.label}</span><Icon size={16} color="#98a3b2" /></div><div className="metric-value">{metric.value}</div><div className="metric-note">{metric.note}</div></div>; })}</section>
 
         <div className="section-heading"><div><h2>Team overview</h2><p>Your FPL squad and current performance</p></div></div>
         <section className="content-grid">
           <div className="card">
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18}}>
-              <div><h2 style={{fontSize:14,margin:0}}>My squad</h2><p className="metric-note">Your 15-player squad will appear here</p></div>
-              <ShieldCheck size={18} color="#98a3b2" />
-            </div>
-            <div className="empty-state"><strong>No team connected yet</strong>Connect your Fantasy Premier League team to see your squad, captain and team structure.</div>
-            <form className="team-form" onSubmit={connectTeam}>
-              <input className="team-input" value={teamId} onChange={(e)=>setTeamId(e.target.value)} placeholder="Enter your FPL Team ID" inputMode="numeric" aria-label="FPL Team ID" />
-              <button className="primary-button" type="submit" disabled={loading}>{loading ? "Connecting..." : "Connect team"}</button>
-            </form>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18}}><div><h2 style={{fontSize:14,margin:0}}>My squad</h2><p className="metric-note">{manager ? `${manager.name ?? "FPL manager"} · Team ID ${teamId}` : "Connect your FPL team"}</p></div><ShieldCheck size={18} color="#98a3b2" /></div>
+            {data?.picks?.picks?.length ? <div style={{display:"grid",gap:8}}>{data.picks.picks.map((pick) => { const player = playerById.get(pick.element); return <div key={pick.element} style={{display:"flex",justifyContent:"space-between",borderBottom:"1px solid #eef0f3",padding:"8px 2px",fontSize:12}}><span>{player?.name ?? `Player ${pick.element}`} {pick.is_captain ? " · C" : ""} {pick.is_vice_captain ? " · VC" : ""}</span><span className="muted">{clubName(player?.team ?? 0)} · {player ? (player.price / 10).toFixed(1) : "—"}m</span></div>; })}</div> : <div className="empty-state"><strong>{manager ? "Your picks are not available yet" : "No team connected yet"}</strong>FPL publishes team picks around the Gameweek deadline. Connect your Team ID to load your manager profile.</div>}
+            <form className="team-form" onSubmit={(event) => { event.preventDefault(); void connectTeam(); }}><input className="team-input" value={teamId} onChange={(event)=>setTeamId(event.target.value)} placeholder="Enter your FPL Team ID" inputMode="numeric" aria-label="FPL Team ID" /><button className="primary-button" type="submit" disabled={loading}>{loading ? "Connecting..." : "Connect team"}</button></form>
             {notice && <p className="metric-note" role="status">{notice}</p>}
           </div>
           <div className="card">
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18}}>
-              <div><h2 style={{fontSize:14,margin:0}}>ScoutIQ insights</h2><p className="metric-note">Your next best decisions</p></div>
-              <Search size={17} color="#98a3b2" />
-            </div>
-            <div className="empty-state"><strong>Analysis will appear here</strong>ScoutIQ will highlight form, fixture swings, injury news and transfer opportunities once your team is connected.</div>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18}}><div><h2 style={{fontSize:14,margin:0}}>ScoutIQ insights</h2><p className="metric-note">Live data from Fantasy Premier League</p></div><Search size={17} color="#98a3b2" /></div>
+            <div className="empty-state"><strong>{data ? `${data.totals.players} players · ${data.totals.teams} clubs` : "Loading FPL data..."}</strong>{data?.gameweek ? `${data.gameweek.name} · Deadline ${new Date(data.gameweek.deadline_time).toLocaleString()}` : "Player and fixture information will appear when the API responds."}</div>
+            <button className="primary-button" style={{height:36,marginTop:14}} onClick={() => void connectTeam()} disabled={loading}><RefreshCw size={13} style={{verticalAlign:"middle",marginRight:7}} />Refresh FPL data</button>
           </div>
         </section>
 
-        <div className="section-heading"><div><h2>Intelligence modules</h2><p>Five connected parts of your FPL assistant</p></div></div>
-        <section className="metric-grid">
-          {[
-            ["My Team", "Squad, budget and captaincy"],
-            ["Transfers", "Five high-value transfer ideas"],
-            ["Predictions", "1, 5 and 10-match outlook"],
-            ["Fixtures", "Difficulty and fixture runs"],
-          ].map(([title, description]) => <div className="card" key={title}>
-            <div style={{fontSize:13,fontWeight:700}}>{title}</div><p className="metric-note">{description}</p>
-          </div>)}
+        <div className="section-heading"><div><h2>Top players by points</h2><p>Live player data from the FPL API</p></div></div>
+        <section className="card" style={{overflowX:"auto"}}>
+          {data?.players?.length ? <table style={{width:"100%",borderCollapse:"collapse",fontSize:12,textAlign:"left"}}><thead><tr style={{color:"#778294"}}>{["Player","Club","Price","Points","Form","Selected"].map((label)=><th key={label} style={{padding:"10px 8px",fontWeight:600}}>{label}</th>)}</tr></thead><tbody>{[...data.players].sort((a,b)=>b.points-a.points).slice(0,10).map((player)=><tr key={player.id} style={{borderTop:"1px solid #eef0f3"}}><td style={{padding:"11px 8px",fontWeight:650}}>{player.name}</td><td style={{padding:"11px 8px"}}>{clubName(player.team)}</td><td style={{padding:"11px 8px"}}>£{(player.price/10).toFixed(1)}m</td><td style={{padding:"11px 8px",fontWeight:700}}>{player.points}</td><td style={{padding:"11px 8px"}}>{player.form}</td><td style={{padding:"11px 8px"}}>{player.selectedBy}%</td></tr>)}</tbody></table> : <div className="empty-state">Player statistics are loading.</div>}
         </section>
-        <p className="metric-note" style={{display:"flex",alignItems:"center",gap:6,marginTop:24}}><RefreshCw size={12}/> Data connection and automated refresh will be enabled in the next build step.</p>
+        <p className="metric-note" style={{display:"flex",alignItems:"center",gap:6,marginTop:24}}><RefreshCw size={12}/> {data?.updatedAt ? `Last synced ${new Date(data.updatedAt).toLocaleString()}. Data refreshes every five minutes.` : "Connecting to the official Fantasy Premier League data API."}</p>
       </main>
     </div>
   );
