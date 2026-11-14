@@ -100,52 +100,69 @@ export default function Home() {
 
         <section className="metric-grid">{metrics.map((metric) => { const Icon = metric.icon; return <div className="card" key={metric.label}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}><span className="metric-label">{metric.label}</span><Icon size={16} color="#98a3b2" /></div><div className="metric-value">{metric.value}</div><div className="metric-note">{metric.note}</div></div>; })}</section>
 
-        <div className="section-heading"><div><h2>My Team</h2><p>Full squad overview · starting XI and substitutes</p></div></div>
+        <div className="section-heading"><div><h2>My Team</h2><p>Your actual FPL starting XI, formation and substitutes</p></div></div>
         <section className="card" style={{marginBottom:14}}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap",marginBottom:18}}>
-            <div><h2 style={{fontSize:14,margin:0}}>{manager?.name ?? "Your FPL squad"}</h2><p className="metric-note">{manager ? `Team ID ${teamId}` : "Connect your FPL Team ID to load all 15 players"}</p></div>
-            <div className="status-pill">{data?.picksEvent ? `Squad · ${data.picksEvent.name}` : "Squad not loaded"}</div>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap",marginBottom:16}}>
+            <div>
+              <h2 style={{fontSize:14,margin:0}}>{manager?.name ?? "Your FPL squad"}</h2>
+              <p className="metric-note">{manager ? `Team ID ${teamId}` : "Connect your FPL Team ID to load your squad"}</p>
+            </div>
+            <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+              {data?.picksEvent && <span className="status-pill">{data.picksEvent.name}</span>}
+              {data?.picks?.picks && <span className="status-pill">{data.picks.picks.filter((pick) => pick.position <= 11).length} starters · {data.picks.picks.filter((pick) => pick.position > 11).length} substitutes</span>}
+            </div>
           </div>
-          {data?.picks?.picks?.length ? <>
-            {(["Goalkeeper","Defenders","Midfielders","Forwards"] as const).map((group, groupIndex) => {
-              const positions = [1,2,3,4];
-              const players = data.picks!.picks!.filter((pick) => playerById.get(pick.element)?.position === positions[groupIndex] && pick.position <= 11);
-              if (!players.length) return null;
-              return <div key={group} style={{marginBottom:18}}>
-                <div className="nav-label" style={{padding:0,marginBottom:8}}>{group}</div>
-                <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(125px,1fr))",gap:9}}>
-                  {players.map((pick) => {
-                    const player = playerById.get(pick.element);
-                    if (!player) return null;
-                    return <div key={pick.element} style={{border:"1px solid #e8ebf0",borderRadius:10,padding:11,background:"#fbfcfb",textAlign:"center"}}>
-                      <div style={{fontSize:12,fontWeight:700}}>{player.name}</div>
-                      <div className="metric-note">{clubName(player.team)} · £{(player.price/10).toFixed(1)}m</div>
-                      <div style={{display:"flex",justifyContent:"center",gap:5,flexWrap:"wrap",marginTop:8}}>
-                        <span className="status-pill">{player.points} pts</span>
-                        {pick.is_captain && <span className="status-pill" style={{background:"#eaf5ef",color:"#167a55"}}>C</span>}
-                        {pick.is_vice_captain && <span className="status-pill">VC</span>}
-                      </div>
+
+          {data?.picks?.picks?.length ? (() => {
+            const starting = data.picks.picks.filter((pick) => pick.position <= 11);
+            const bench = data.picks.picks.filter((pick) => pick.position > 11).sort((a,b) => a.position-b.position);
+            const formation = [2,3,4].map((position) => starting.filter((pick) => playerById.get(pick.element)?.position === position).length).join("-");
+            const renderPlayer = (pick: typeof starting[number], isBench = false) => {
+              const player = playerById.get(pick.element);
+              if (!player) return null;
+              return <div key={pick.element} style={{width:112,maxWidth:"29vw",background:"rgba(255,255,255,.97)",border:"1px solid rgba(17,58,38,.12)",borderRadius:10,padding:"9px 7px",textAlign:"center",boxShadow:"0 2px 7px rgba(0,0,0,.10)"}}>
+                <div style={{width:30,height:30,borderRadius:"50%",background:"#eaf5ef",color:"#167a55",display:"grid",placeItems:"center",fontSize:10,fontWeight:800,margin:"0 auto 6px"}}>{clubName(player.team)}</div>
+                <div style={{fontSize:11,fontWeight:750,color:"#18212f",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{player.name}</div>
+                <div style={{fontSize:9,color:"#778294",marginTop:3}}>£{(player.price/10).toFixed(1)}m · {player.points} pts</div>
+                <div style={{display:"flex",justifyContent:"center",gap:4,marginTop:6,flexWrap:"wrap"}}>
+                  {pick.is_captain && <span style={{fontSize:9,fontWeight:800,background:"#167a55",color:"white",borderRadius:99,padding:"2px 6px"}}>C</span>}
+                  {pick.is_vice_captain && <span style={{fontSize:9,fontWeight:800,background:"#eaf5ef",color:"#167a55",borderRadius:99,padding:"2px 6px"}}>VC</span>}
+                  {isBench && <span style={{fontSize:9,color:"#647184"}}>B{pick.position-11}</span>}
+                </div>
+              </div>;
+            };
+            return <>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                <span className="nav-label" style={{padding:0,margin:0}}>STARTING XI</span>
+                <span style={{fontSize:11,fontWeight:700,color:"#167a55"}}>Formation {formation}</span>
+              </div>
+              <div style={{position:"relative",overflow:"hidden",borderRadius:14,padding:"20px 8px",background:"repeating-linear-gradient(0deg,#247a4b 0px,#247a4b 62px,#2b8754 62px,#2b8754 124px)",border:"4px solid #e5eee7"}}>
+                <div style={{position:"absolute",inset:"8px",border:"1px solid rgba(255,255,255,.42)",borderRadius:8,pointerEvents:"none"}} />
+                <div style={{position:"absolute",left:"50%",top:"50%",width:94,height:94,border:"1px solid rgba(255,255,255,.32)",borderRadius:"50%",transform:"translate(-50%,-50%)",pointerEvents:"none"}} />
+                <div style={{position:"absolute",left:8,right:8,top:"50%",borderTop:"1px solid rgba(255,255,255,.32)",pointerEvents:"none"}} />
+                <div style={{position:"relative",zIndex:1,display:"grid",gap:16}}>
+                  {[1,2,3,4].map((position) => {
+                    const rowPlayers = starting.filter((pick) => playerById.get(pick.element)?.position === position).sort((a,b) => a.position-b.position);
+                    if (!rowPlayers.length) return null;
+                    return <div key={position} style={{display:"flex",justifyContent:"center",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                      {rowPlayers.map((pick) => renderPlayer(pick))}
                     </div>;
                   })}
                 </div>
-              </div>;
-            })}
-            <div style={{borderTop:"1px solid #e8ebf0",paddingTop:14}}>
-              <div className="nav-label" style={{padding:0,marginBottom:8}}>Substitutes</div>
-              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(125px,1fr))",gap:9}}>
-                {data.picks.picks.filter((pick) => pick.position > 11).sort((a,b)=>a.position-b.position).map((pick) => {
-                  const player = playerById.get(pick.element);
-                  if (!player) return null;
-                  return <div key={pick.element} style={{border:"1px solid #e8ebf0",borderRadius:10,padding:11,background:"#f7f8fa",textAlign:"center"}}>
-                    <div className="metric-note">Bench {pick.position - 11}</div>
-                    <div style={{fontSize:12,fontWeight:700}}>{player.name}</div>
-                    <div className="metric-note">{clubName(player.team)} · £{(player.price/10).toFixed(1)}m · {player.points} pts</div>
-                  </div>;
-                })}
               </div>
-            </div>
-          </> : <div className="empty-state"><strong>{manager ? "Your full squad is not published yet" : "No team connected yet"}</strong>Enter your Team ID below. FPL makes the complete 15-player squad available through a Gameweek team-picks endpoint once picks are published. We also try the latest completed Gameweek.</div>}
-          <form className="team-form" onSubmit={(event) => { event.preventDefault(); void connectTeam(); }}><input className="team-input" value={teamId} onChange={(event)=>setTeamId(event.target.value)} placeholder="Enter your FPL Team ID" inputMode="numeric" aria-label="FPL Team ID" /><button className="primary-button" type="submit" disabled={loading}>{loading ? "Connecting..." : "Load my team"}</button></form>
+              <div style={{marginTop:18,border:"1px solid #e8ebf0",background:"#f7f8fa",borderRadius:12,padding:13}}>
+                <div className="nav-label" style={{padding:0,marginBottom:10}}>SUBSTITUTES</div>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(4,minmax(0,1fr))",gap:8}}>
+                  {bench.map((pick) => <div key={pick.element} style={{minWidth:0}}>{renderPlayer(pick,true)}</div>)}
+                </div>
+              </div>
+            </>;
+          })() : <div className="empty-state"><strong>{manager ? "Your team picks are not available yet" : "No team connected yet"}</strong>Connect your Team ID. FPL only publishes the full squad through a Gameweek picks endpoint; ScoutIQ also checks the latest completed Gameweek.</div>}
+
+          <form className="team-form" onSubmit={(event) => { event.preventDefault(); void connectTeam(); }}>
+            <input className="team-input" value={teamId} onChange={(event)=>setTeamId(event.target.value)} placeholder="Enter your FPL Team ID" inputMode="numeric" aria-label="FPL Team ID" />
+            <button className="primary-button" type="submit" disabled={loading}>{loading ? "Connecting..." : "Load my team"}</button>
+          </form>
           {notice && <p className="metric-note" role="status">{notice}</p>}
         </section>
         <section className="content-grid">
