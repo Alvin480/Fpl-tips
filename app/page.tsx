@@ -17,7 +17,8 @@ const navigation = [
 
 type FplData = {
   updatedAt: string;
-  gameweek: { id: number; name: string; deadline_time: string } | null;\n  picksEvent: { id: number; name: string } | null;
+  gameweek: { id: number; name: string; deadline_time: string } | null;
+  picksEvent: { id: number; name: string } | null;
   totals: { players: number; teams: number };
   players: Array<{ id: number; name: string; team: number; position: number; price: number; points: number; form: string; status: string; selectedBy: string }>;
   clubs: Array<{ id: number; name: string; short_name: string }>;
